@@ -20,12 +20,11 @@ import re
 import struct
 import subprocess
 import time
+import winreg
 
 import netaddr
 from oslo_log import log as oslo_logging
 import pywintypes
-import six
-from six.moves import winreg
 from tzlocal import windows_tz
 import win32api
 from win32com import client
@@ -602,7 +601,7 @@ class WindowsUtils(base.BaseOSUtils):
         sidNameUse = wintypes.DWORD()
 
         ret_val = advapi32.LookupAccountNameW(
-            0, six.text_type(username), sid, ctypes.byref(cbSid), domainName,
+            0, str(username), sid, ctypes.byref(cbSid), domainName,
             ctypes.byref(cchReferencedDomainName), ctypes.byref(sidNameUse))
         if not ret_val:
             raise exception.WindowsCloudbaseInitException(
@@ -613,9 +612,9 @@ class WindowsUtils(base.BaseOSUtils):
     def add_user_to_local_group(self, username, groupname):
 
         lmi = Win32_LOCALGROUP_MEMBERS_INFO_3()
-        lmi.lgrmi3_domainandname = six.text_type(username)
+        lmi.lgrmi3_domainandname = str(username)
 
-        ret_val = netapi32.NetLocalGroupAddMembers(0, six.text_type(groupname),
+        ret_val = netapi32.NetLocalGroupAddMembers(0, str(groupname),
                                                    3, ctypes.pointer(lmi), 1)
 
         if ret_val == self.NERR_GroupNotFound:
@@ -642,6 +641,9 @@ class WindowsUtils(base.BaseOSUtils):
             # User not found
             pass
 
+    @retry_decorator.retry_decorator(
+        max_retry_count=3,
+        exceptions=exception.LoadUserProfileCloudbaseInitException)
     def create_user_logon_session(self, username, password, domain='.',
                                   load_profile=True,
                                   logon_type=LOGON32_LOGON_INTERACTIVE):
@@ -649,9 +651,9 @@ class WindowsUtils(base.BaseOSUtils):
                   {"username": username, "domain": domain})
 
         token = wintypes.HANDLE()
-        ret_val = advapi32.LogonUserW(six.text_type(username),
-                                      six.text_type(domain),
-                                      six.text_type(password),
+        ret_val = advapi32.LogonUserW(str(username),
+                                      str(domain),
+                                      str(password),
                                       logon_type,
                                       self.LOGON32_PROVIDER_DEFAULT,
                                       ctypes.byref(token))
@@ -662,11 +664,11 @@ class WindowsUtils(base.BaseOSUtils):
         if load_profile:
             pi = Win32_PROFILEINFO()
             pi.dwSize = ctypes.sizeof(Win32_PROFILEINFO)
-            pi.lpUserName = six.text_type(username)
+            pi.lpUserName = str(username)
             ret_val = userenv.LoadUserProfileW(token, ctypes.byref(pi))
             if not ret_val:
                 kernel32.CloseHandle(token)
-                raise exception.WindowsCloudbaseInitException(
+                raise exception.LoadUserProfileCloudbaseInitException(
                     "Cannot load user profile: %r")
 
         return token
@@ -753,8 +755,7 @@ class WindowsUtils(base.BaseOSUtils):
 
     def set_host_name(self, new_host_name):
         ret_val = kernel32.SetComputerNameExW(
-            self.ComputerNamePhysicalDnsHostname,
-            six.text_type(new_host_name))
+            self.ComputerNamePhysicalDnsHostname, str(new_host_name))
         if not ret_val:
             raise exception.WindowsCloudbaseInitException(
                 "Cannot set host name: %r")
@@ -855,16 +856,23 @@ class WindowsUtils(base.BaseOSUtils):
                     'value "%(mtu)s" failed' % {'name': name, 'mtu': mtu})
 
     def rename_network_adapter(self, old_name, new_name):
-        base_dir = self._get_system_dir()
-        netsh_path = os.path.join(base_dir, 'netsh.exe')
-
-        args = [netsh_path, "interface", "set", "interface",
-                'name=%s' % old_name, 'newname=%s' % new_name]
-        (out, err, ret_val) = self.execute_process(args, shell=False)
-        if ret_val:
+        net_adapter = self._get_network_msft_adapter(old_name)
+        try:
+            net_adapter.rename(new_name)
+            self._get_network_msft_adapter(new_name)
+        except Exception:
             raise exception.CloudbaseInitException(
                 'Renaming interface "%(old_name)s" to "%(new_name)s" '
                 'failed' % {'old_name': old_name, 'new_name': new_name})
+
+    @staticmethod
+    def _get_network_msft_adapter(name):
+        conn = wmi.WMI(moniker='//./root/standardcimv2')
+        query = conn.MSFT_NetAdapter(Name=name)
+        if not len(query):
+            raise exception.CloudbaseInitException(
+                "MSFT network adapter not found: %s" % name)
+        return query[0]
 
     @staticmethod
     def _get_network_adapter(name):
@@ -912,19 +920,21 @@ class WindowsUtils(base.BaseOSUtils):
         return reboot_required
 
     @staticmethod
-    def _fix_network_adapter_dhcp(interface_name, enable_dhcp, address_family):
-        interface_id = WindowsUtils._get_network_adapter(interface_name).GUID
-        tcpip_key = "Tcpip6" if address_family == AF_INET6 else "Tcpip"
+    def _fix_network_adapter_dhcp(interface_name,
+                                  enable_dhcp,
+                                  address_family):
+        enable_dhcp_value = 1 if enable_dhcp else 0
 
-        with winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                "SYSTEM\\CurrentControlSet\\services\\%(tcpip_key)s\\"
-                "Parameters\\Interfaces\\%(interface_id)s" %
-                {"tcpip_key": tcpip_key, "interface_id": interface_id},
-                0, winreg.KEY_SET_VALUE) as key:
-            winreg.SetValueEx(
-                key, 'EnableDHCP', 0, winreg.REG_DWORD,
-                1 if enable_dhcp else 0)
+        conn = wmi.WMI(moniker='//./root/standardcimv2')
+        net_interface = conn.MSFT_NetIPInterface(
+            InterfaceAlias=interface_name, AddressFamily=address_family)
+        if not len(net_interface):
+            raise exception.ItemNotFoundException(
+                'Network interface with name "%s" not found' %
+                interface_name)
+        net_interface = net_interface[0]
+        net_interface.Dhcp = enable_dhcp_value
+        net_interface.put()
 
     @staticmethod
     def _set_interface_dns(interface_name, dnsnameservers):
@@ -1389,7 +1399,7 @@ class WindowsUtils(base.BaseOSUtils):
     def get_volume_label(self, drive):
         max_label_size = 261
         label = ctypes.create_unicode_buffer(max_label_size)
-        ret_val = kernel32.GetVolumeInformationW(six.text_type(drive), label,
+        ret_val = kernel32.GetVolumeInformationW(str(drive), label,
                                                  max_label_size, 0, 0, 0, 0, 0)
         if ret_val:
             return label.value
@@ -1399,8 +1409,7 @@ class WindowsUtils(base.BaseOSUtils):
         volume_name = ctypes.create_unicode_buffer(max_volume_name_len)
 
         if not kernel32.GetVolumeNameForVolumeMountPointW(
-                six.text_type(mount_point), volume_name,
-                max_volume_name_len):
+                str(mount_point), volume_name, max_volume_name_len):
             if kernel32.GetLastError() in [self.ERROR_INVALID_NAME,
                                            self.ERROR_PATH_NOT_FOUND]:
                 raise exception.ItemNotFoundException(

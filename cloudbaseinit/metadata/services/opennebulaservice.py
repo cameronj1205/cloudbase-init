@@ -21,7 +21,6 @@ import socket
 import struct
 
 from oslo_log import log as oslo_logging
-import six
 
 from cloudbaseinit.metadata.services import base
 from cloudbaseinit.models import network as network_model
@@ -88,12 +87,14 @@ class OpenNebulaService(base.BaseMetadataService):
         new_content = sep.join(lines)
         # get pairs
         pairs = {}
-        pattern = (br"(?P<key>\w+)=(['\"](?P<str_value>[\s\S]+?)['\"]|"
-                   br"(?P<int_value>\d+))(?=\s+\w+=)")
+        pattern = (br"(?P<key>\w+)=((?P<int_value>\d+)|"
+                   br"['\"](?P<str_value>[\s\S]*?)['\"])(?=\s+\w+=)")
         for match in re.finditer(pattern, new_content):
             key = encoding.get_as_string(match.group("key"))
-            pairs[key] = (match.group("str_value") or
-                          int(match.group("int_value")))
+            val = match.group("str_value")
+            if match.group("int_value"):
+                val = int(match.group("int_value"))
+            pairs[key] = val
         return pairs
 
     @staticmethod
@@ -106,8 +107,7 @@ class OpenNebulaService(base.BaseMetadataService):
         address_chunks = address.split(".")
         gateway_chunks = gateway.split(".")
         netmask_chunks = []
-        for achunk, gchunk in six.moves.zip(
-                address_chunks, gateway_chunks):
+        for achunk, gchunk in zip(address_chunks, gateway_chunks):
             if achunk == gchunk:
                 nchunk = "255"
             else:

@@ -14,11 +14,7 @@
 
 import importlib
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import exception
 from cloudbaseinit.tests import testutils
@@ -31,12 +27,11 @@ class RdpTest(unittest.TestCase):
 
     def setUp(self):
         self._wmi_mock = mock.MagicMock()
-        self._moves_mock = mock.MagicMock()
+        self._winreg_mock = mock.MagicMock()
         self._module_patcher = mock.patch.dict(
             'sys.modules', {
                 'wmi': self._wmi_mock,
-                'six.moves': self._moves_mock})
-        self._winreg_mock = self._moves_mock.winreg
+                'winreg': self._winreg_mock})
         self.snatcher = testutils.LogSnatcher(MODPATH)
         self._module_patcher.start()
         self.rdp = importlib.import_module(MODPATH)

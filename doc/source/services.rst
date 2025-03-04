@@ -49,6 +49,7 @@ Capabilities:
     * public keys
     * `WinRM <https://docs.microsoft.com/en-us/windows/win32/winrm/authentication-for-remote-connections#client-certificate-based-authentication>`_ authentication certificates
     * static network configuration
+    * admin user name
     * admin user password
     * post admin user password (only once)
     * user data
@@ -101,6 +102,7 @@ Capabilities:
     * public keys
     * authentication certificates
     * static network configuration
+    * admin user name
     * admin user password
     * user data
 
@@ -126,19 +128,23 @@ similar to the EC2 metadata in terms of how the metadata files are named and str
 
 The metadata is provided on a config-drive (vfat or iso9660) with the label cidata or CIDATA.
 
-The folder structure for NoCloud is:
+The default folder structure for NoCloud is:
 
   * /user-data
   * /meta-data
 
 The user-data and meta-data files respect the EC2 metadata service format.
 
+The names of the meta-data and user-data files can be configured.
+
 Capabilities:
 
     * instance id
     * hostname
     * public keys
-    * static network configuration (Debian format)
+    * static network configuration (Debian and `network config v1
+      <https://cloudinit.readthedocs.io/en/22.4.2/topics/network-config-format-v1.html>`__
+      formats)
     * user data
 
 Config options for `config_drive` section:
@@ -148,6 +154,11 @@ Config options for `config_drive` section:
     * vfat (bool: True)
     * types (list: ["vfat", "iso"])
     * locations (list: ["cdrom", "hdd", "partition"])
+
+Config options for `nocloud` section:
+
+    * metadata_file (string: "meta-data")
+    * userdata_file (string: "user-data")
 
 Example metadata:
 
@@ -164,6 +175,67 @@ Example metadata:
       hwaddress ether 00:11:22:33:44:55
     hostname: windowshost1
 
+Cloud-init's `network config v1
+<https://cloudinit.readthedocs.io/en/latest/topics/network-config-format-v1.html>`_
+format can be used to configure static network configuration.
+The configuration file should be named `network-config` and should be present
+at the same folder level with the `meta-data` and `user-data` file.
+If no `network-config` is found, cloudbase-init will use the `network-interfaces`
+value from the metadata (if any).
+
+The following network config types are implemented: physical, bond, vlan and
+nameserver.
+Unsupported config types: bridge and route.
+
+Example:
+
+.. code-block:: yaml
+
+    version: 1
+    config:
+       - type: physical
+         name: interface0
+         mac_address: "52:54:00:12:34:00"
+         mtu: 1450
+         subnets:
+            - type: static
+              address: 192.168.1.10
+              netmask: 255.255.255.0
+              dns_nameservers:
+                - 192.168.1.11
+       - type: bond
+         name: bond0
+         bond_interfaces:
+           - gbe0
+           - gbe1
+         mac_address: "52:54:00:12:34:00"
+         params:
+           bond-mode: active-backup
+           bond-lacp-rate: false
+         mtu: 1450
+         subnets:
+            - type: static
+              address: 192.168.1.10
+              netmask: 255.255.255.0
+              dns_nameservers:
+                - 192.168.1.11
+       - type: vlan
+         name: vlan0
+         vlan_link: eth1
+         vlan_id: 150
+         mac_address: "52:54:00:12:34:00"
+         mtu: 1450
+         subnets:
+            - type: static
+              address: 192.168.1.10
+              netmask: 255.255.255.0
+              dns_nameservers:
+                - 192.168.1.11
+       - type: nameserver
+         address:
+           - 192.168.23.2
+           - 8.8.8.8
+         search: acme.local
 
 More information on the NoCloud metadata service specifications can be found
 `here <https://cloudinit.readthedocs.io/en/latest/topics/datasources/nocloud.html>`_.
@@ -453,6 +525,20 @@ Example metadata in yaml format:
     public-keys-data: |
       ssh-key 1
       ssh-key 2
+    network:
+      version: 2
+      ethernets:
+        id0:
+          match:
+            macaddress: "00:50:56:a1:8e:43"
+          set-name: "eth0"
+          addresses:
+          - 172.26.0.37/28
+          gateway4: 172.26.0.33
+          nameservers:
+            addresses:
+            - 10.20.145.1
+            - 10.20.145.2
 
 This metadata content needs to be set as string in the guestinfo
 dictionary, thus needs to be converted to base64 (it is recommended to
@@ -483,6 +569,7 @@ Capabilities:
     * instance id
     * hostname
     * public keys
+    * static network configuration
     * admin user name
     * admin user password
     * user data

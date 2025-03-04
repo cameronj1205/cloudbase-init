@@ -13,11 +13,7 @@
 #    under the License.
 
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.tests import testutils
@@ -29,14 +25,14 @@ CONF = cloudbaseinit_conf.CONF
 
 class NetworkUtilsTest(unittest.TestCase):
 
-    @mock.patch('six.moves.urllib.request.urlopen')
+    @mock.patch('urllib.request.urlopen')
     def test_check_url(self, mock_url_open):
         mock_url_open.return_value = None
         self.assertTrue(network.check_url("fake_url"))
 
     @mock.patch('sys.platform', new='win32')
     @mock.patch('cloudbaseinit.osutils.factory.get_os_utils')
-    @mock.patch('six.moves.urllib.parse.urlparse')
+    @mock.patch('urllib.parse.urlparse')
     def _test_check_metadata_ip_route(self, mock_urlparse, mock_get_os_utils,
                                       side_effect):
         mock_utils = mock.MagicMock()
@@ -96,3 +92,21 @@ class NetworkUtilsTest(unittest.TestCase):
         res = network.get_local_ip("fake address")
         self.assertEqual(res, "fake name")
         mock_socket().connect.assert_called_with(("fake address", 8000))
+
+    def _test_ip_netmask_to_cidr(self, expected_result, fake_ip_address,
+                                 fake_netmask):
+        result = network.ip_netmask_to_cidr(fake_ip_address, fake_netmask)
+        self.assertEqual(expected_result, result)
+
+    def test_ip_netmask_to_cidr(self):
+        fake_ip_address = '10.1.1.1'
+        expected_result = '10.1.1.1/24'
+        fake_netmask = '255.255.255.0'
+        self._test_ip_netmask_to_cidr(expected_result, fake_ip_address,
+                                      fake_netmask)
+
+    def test_ip_netmask_to_cidr_empty_netmask(self):
+        fake_ip_address = '10.1.1.1'
+        fake_netmask = None
+        self._test_ip_netmask_to_cidr(fake_ip_address, fake_ip_address,
+                                      fake_netmask)

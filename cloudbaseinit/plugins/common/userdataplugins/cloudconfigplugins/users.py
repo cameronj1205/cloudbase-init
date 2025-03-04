@@ -14,8 +14,6 @@
 
 import datetime
 import os
-import pytz
-import six
 
 from oslo_log import log as oslo_logging
 
@@ -41,11 +39,11 @@ class UsersPlugin(base.BaseCloudConfigPlugin):
         groups = data.get('groups', None)
         primary_group = data.get('primary_group', None)
         user_groups = []
-        if isinstance(groups, six.string_types):
+        if isinstance(groups, str):
                 user_groups.extend(groups.split(', '))
         elif isinstance(groups, (list, tuple)):
                 user_groups.extend(groups)
-        if isinstance(primary_group, six.string_types):
+        if isinstance(primary_group, str):
                 user_groups.extend(primary_group.split(', '))
         elif isinstance(primary_group, (list, tuple)):
                 user_groups.extend(primary_group)
@@ -68,14 +66,14 @@ class UsersPlugin(base.BaseCloudConfigPlugin):
         expiredate = data.get('expiredate', None)
         expire_interval = None
 
-        if isinstance(expiredate, six.string_types):
+        if isinstance(expiredate, str):
             year, month, day = map(int, expiredate.split('-'))
             expiredate = datetime.datetime(year=year, month=month, day=day,
-                                           tzinfo=pytz.utc)
+                                           tzinfo=datetime.timezone.utc)
             # Py2.7 does not support timestamps, this is the
             # only way to compute the seconds passed since the unix epoch
             unix_time = datetime.datetime(year=1970, month=1, day=1,
-                                          tzinfo=pytz.utc)
+                                          tzinfo=datetime.timezone.utc)
             expire_interval = (expiredate - unix_time).total_seconds()
 
         return expire_interval
@@ -115,7 +113,7 @@ class UsersPlugin(base.BaseCloudConfigPlugin):
 
             public_keys = item.get('ssh_authorized_keys', [])
             should_create_home = (public_keys or
-                                  not item.get('no_create_home ', False))
+                                  not item.get('no_create_home', False))
             if user_disabled and should_create_home:
                 raise exception.CloudbaseInitException(
                     "The user is required to be enabled if public_keys "

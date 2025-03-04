@@ -16,10 +16,7 @@ import base64
 import importlib
 import os
 import unittest
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.metadata.services import base
@@ -37,14 +34,12 @@ class OvfServiceTest(unittest.TestCase):
         self._mock_untangle = mock.MagicMock()
         self._mock_ctypes = mock.MagicMock()
         self._mock_wintypes = mock.MagicMock()
-        self._moves_mock = mock.MagicMock()
 
         self._module_patcher = mock.patch.dict(
             'sys.modules',
             {'untangle': self._mock_untangle,
              'ctypes': self._mock_ctypes,
              'ctypes.wintypes': self._mock_wintypes,
-             'six.moves': self._moves_mock
              })
         self._module_patcher.start()
         self._ovfservice_module = importlib.import_module(

@@ -14,11 +14,7 @@
 
 import importlib
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.plugins.common import base
@@ -32,12 +28,12 @@ class RDPPluginTest(unittest.TestCase):
 
     def setUp(self):
         self.mock_wmi = mock.MagicMock()
-        self._moves_mock = mock.MagicMock()
+        self._winreg_mock = mock.MagicMock()
         patcher = mock.patch.dict(
             "sys.modules",
             {
                 "wmi": self.mock_wmi,
-                "six.moves": self._moves_mock
+                "winreg": self._winreg_mock
             }
         )
         patcher.start()

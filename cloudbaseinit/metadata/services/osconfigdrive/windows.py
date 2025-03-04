@@ -106,9 +106,15 @@ class WindowsConfigDriveManager(base.BaseConfigDriveManager):
                 offset += bytes_to_read
 
     def _extract_files_from_iso(self, iso_file_path):
-        args = [CONF.bsdtar_path, '-xf', iso_file_path,
-                '-C', self.target_path]
-        (out, err, exit_code) = self._osutils.execute_process(args, False)
+        bsdtar_args = [CONF.bsdtar_path, '-xf', iso_file_path,
+                       '-C', self.target_path]
+
+        if not os.path.exists(CONF.bsdtar_path):
+            raise exception.CloudbaseInitException(
+                'Bsdtar path "%s" does not exist.' % CONF.bsdtar_path)
+
+        (out, err, exit_code) = self._osutils.execute_process(bsdtar_args,
+                                                              False)
 
         if exit_code:
             raise exception.CloudbaseInitException(
@@ -159,7 +165,7 @@ class WindowsConfigDriveManager(base.BaseConfigDriveManager):
 
     def _get_config_drive_from_vfat(self, drive_label, metadata_file):
         for drive_path in self._osutils.get_physical_disks():
-            if vfat.is_vfat_drive(self._osutils, drive_path):
+            if vfat.is_vfat_drive(self._osutils, drive_path, drive_label):
                 LOG.info('Config Drive found on disk %r', drive_path)
                 vfat.copy_from_vfat_drive(self._osutils, drive_path,
                                           self.target_path)

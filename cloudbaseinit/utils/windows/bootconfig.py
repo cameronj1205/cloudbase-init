@@ -56,13 +56,19 @@ def get_boot_system_devices():
 
 def _get_current_bcd_store():
     conn = wmi.WMI(moniker='//./root/wmi')
-    success, store = conn.BcdStore.OpenStore(File="")
-    if not success:
+    # Under PyMI, the following returns one element if the store is found,
+    # two elements otherwise.
+    #
+    #     >>> conn.BcdStore.OpenStore(File="file not present")
+    #    (False, None)
+    #    >>> conn.BcdStore.OpenStore(File="")
+    #    (<pymi_object: >,)
+    store = conn.BcdStore.OpenStore(File="")[0]
+    if not store:
         raise exception.CloudbaseInitException("Cannot open BCD store")
-    store = wmi._wmi_object(store)
-    current_store, success = store.OpenObject(Id=STORE_CURRENT)
-    current_store = wmi._wmi_object(current_store)
-    if not success:
+
+    current_store = store.OpenObject(Id=STORE_CURRENT)[0]
+    if not current_store:
         raise exception.CloudbaseInitException("Cannot open BCD current store")
 
     return current_store
@@ -90,9 +96,15 @@ def set_current_bcd_device_to_boot_partition():
 def enable_auto_recovery(enable):
     current_store = _get_current_bcd_store()
 
-    success, = current_store.SetBooleanElement(
-        BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED, enable)
-    if not success:
+    current_store.SetBooleanElement(
+        enable,
+        BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED)
+
+    current_state = current_store.GetElement(
+        BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED)[0].Boolean
+
+    if current_state != enable:
         raise exception.CloudbaseInitException(
-            "Cannot set boolean element: %s" %
-            BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED)
+            "Cannot set boolean element: '%s'. "
+            "Current state '%s' != desired state '%s'." %
+            (BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED, current_state, enable))

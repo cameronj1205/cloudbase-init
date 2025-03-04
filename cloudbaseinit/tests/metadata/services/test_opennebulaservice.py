@@ -16,11 +16,7 @@
 import re
 import textwrap
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit.metadata.services import base
 from cloudbaseinit.metadata.services import opennebulaservice
@@ -126,7 +122,7 @@ class _TestOpenNebulaService(unittest.TestCase):
         self._service = opennebulaservice.OpenNebulaService()
 
 
-@mock.patch("six.moves.builtins.open", new=OPEN)
+@mock.patch("builtins.open", new=OPEN)
 class TestOpenNebulaService(_TestOpenNebulaService):
 
     @classmethod
@@ -145,6 +141,8 @@ class TestOpenNebulaService(_TestOpenNebulaService):
             d: e
             '
             ivar=10
+            TESTEMPTY=''
+            TESTEMPTY2=""
         """)
         if comment:
             content += "# A simple comment\n"
@@ -152,6 +150,8 @@ class TestOpenNebulaService(_TestOpenNebulaService):
             content = content.replace("\n", "\r\n")
         pairs = self._service._parse_shell_variables(content.encode())
         _pairs = {
+            "TESTEMPTY": b"",
+            "TESTEMPTY2": b"",
             "VAR1": b"1",
             "var2": b"abcdef",
             "VAR_VAR3": b"aaa.bbb.123.ccc",

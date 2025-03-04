@@ -17,11 +17,7 @@ import importlib
 import itertools
 import os
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit import exception
@@ -151,7 +147,7 @@ class TestWindowsConfigDriveManager(unittest.TestCase):
     def test_get_iso_file_size(self):
         self._test_get_iso_file_size()
 
-    @mock.patch("six.moves.builtins.open", new=OPEN)
+    @mock.patch("builtins.open", new=OPEN)
     def test_write_iso_file(self):
         file_path = "fake\\path"
         file_size = 100 * 512
@@ -176,10 +172,13 @@ class TestWindowsConfigDriveManager(unittest.TestCase):
         device.read.assert_has_calls(device_read_calls)
         OPEN.return_value.write.assert_has_calls(stream_write_calls)
 
-    def _test_extract_files_from_iso(self, exit_code):
+    @mock.patch('os.path.exists')
+    def _test_extract_files_from_iso(self, os_path_exists, exit_code,
+                                     enforce_os_path_exists=True):
         fake_path = os.path.join('fake', 'path')
         fake_target_path = os.path.join(fake_path, 'target')
         self._config_manager.target_path = fake_target_path
+        os_path_exists.return_code = enforce_os_path_exists
         args = [CONF.bsdtar_path, '-xf', fake_path, '-C', fake_target_path]
 
         self.osutils.execute_process.return_value = ('fake out', 'fake err',
@@ -198,6 +197,10 @@ class TestWindowsConfigDriveManager(unittest.TestCase):
 
     def test_extract_files_from_iso_fail(self):
         self._test_extract_files_from_iso(exit_code=1)
+
+    def test_extract_files_from_iso_fail_bsdtar_does_not_exist(self):
+        self._test_extract_files_from_iso(exit_code=1,
+                                          enforce_os_path_exists=False)
 
     @mock.patch('cloudbaseinit.metadata.services.osconfigdrive.windows.'
                 'WindowsConfigDriveManager._extract_files_from_iso')
@@ -286,7 +289,7 @@ class TestWindowsConfigDriveManager(unittest.TestCase):
     @mock.patch('cloudbaseinit.metadata.services.osconfigdrive.windows.'
                 'WindowsConfigDriveManager.'
                 '_extract_iso_from_devices')
-    @mock.patch("six.moves.builtins.map")
+    @mock.patch("builtins.map")
     def test_get_config_drive_from_raw_hdd(self, mock_map,
                                            mock_extract_iso_from_devices):
         Disk = self.conf_module.disk.Disk
@@ -322,8 +325,8 @@ class TestWindowsConfigDriveManager(unittest.TestCase):
         self.osutils.get_physical_disks.assert_called_once_with()
 
         expected_is_vfat_calls = [
-            mock.call(self.osutils, mock.sentinel.drive1),
-            mock.call(self.osutils, mock.sentinel.drive2),
+            mock.call(self.osutils, mock.sentinel.drive1, self._fake_label),
+            mock.call(self.osutils, mock.sentinel.drive2, self._fake_label),
         ]
         self.assertEqual(expected_is_vfat_calls, mock_is_vfat_drive.mock_calls)
         mock_copy_from_vfat_drive.assert_called_once_with(

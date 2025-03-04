@@ -14,7 +14,6 @@
 
 import logging
 import serial
-import six
 
 from oslo_log import formatters
 from oslo_log import log
@@ -29,7 +28,7 @@ def _safe_write(function):
     """Avoid issues related to unicode strings handling."""
     def _wrapper(message):
         # Unicode strings are not properly handled by the serial module
-        if isinstance(message, six.text_type):
+        if isinstance(message, str):
             function(message.encode("utf-8"))
         else:
             function(message)
@@ -102,5 +101,5 @@ def setup(product_name):
                 formatters.ContextFormatter(project=product_name,
                                             datefmt=datefmt))
         except serial.SerialException:
-            LOG.warn("Serial port: {0} could not be opened".format(
-                     CONF.logging_serial_port_settings))
+            LOG.warning("Serial port: {0} could not be opened".format(
+                        CONF.logging_serial_port_settings))

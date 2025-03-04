@@ -14,11 +14,7 @@
 
 import importlib
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import exception
 from cloudbaseinit.tests import testutils
@@ -88,23 +84,25 @@ class BootConfigTest(unittest.TestCase):
             **expected_call_args)
         self.assertEqual(res, [mock_id])
 
-    def _test_get_current_bcd_store(self, mock_success=True, mock_store=None):
+    def _test_get_current_bcd_store(self, mock_success=True):
         conn = self._wmi_mock.WMI
-        store = self._wmi_mock._wmi_object
-        mock_store = mock.Mock()
         mock_bcdstore = mock.MagicMock()
         conn.return_value = mock_bcdstore
-        store.return_value = mock_store
-        mock_bcdstore.BcdStore.OpenStore.return_value = (mock_success,
-                                                         mock_store)
+        mock_store_open_store = mock.MagicMock()
+        mock_store_open_object = mock.MagicMock()
+        mock_bcdstore.BcdStore.OpenStore.return_value = (
+            mock_store_open_store, None)
         if not mock_success:
+            mock_bcdstore.BcdStore.OpenStore.return_value = (False, None)
             self.assertRaises(
                 exception.CloudbaseInitException,
                 self.bootconfig._get_current_bcd_store)
         else:
-            mock_store.OpenObject.return_value = [None, mock_success]
+            mock_store_open_store.OpenObject.return_value = [
+                mock_store_open_object,
+                None]
             res_store = self.bootconfig._get_current_bcd_store()
-            self.assertEqual(res_store, mock_store)
+            self.assertEqual(res_store, mock_store_open_object)
 
     def test_get_current_bcd_store(self):
         self._test_get_current_bcd_store()
@@ -154,10 +152,15 @@ class BootConfigTest(unittest.TestCase):
                                    mock_success=True, mock_enable=True):
         mock_store = mock.Mock()
         mock_get_current_bcd_store.return_value = mock_store
-        mock_store.SetBooleanElement.side_effect = ((mock_success,),)
+        mock_store.SetBooleanElement.return_value = ()
+
+        mock_get_element = mock.MagicMock()
+        mock_get_element.Boolean = mock_success
+        mock_store.GetElement.return_value = [mock_get_element]
+
         expected_call = (
-            self.bootconfig.BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED,
-            mock_enable)
+            mock_enable,
+            self.bootconfig.BCDLIBRARY_BOOLEAN_AUTO_RECOVERY_ENABLED)
         if not mock_success:
             self.assertRaises(exception.CloudbaseInitException,
                               self.bootconfig.enable_auto_recovery,

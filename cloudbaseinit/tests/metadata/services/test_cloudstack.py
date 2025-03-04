@@ -15,12 +15,8 @@
 import functools
 import socket
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
-from six.moves import urllib
+import unittest.mock as mock
+import urllib
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit.metadata.services import base

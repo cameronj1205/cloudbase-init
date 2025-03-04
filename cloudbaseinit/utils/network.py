@@ -14,13 +14,14 @@
 
 
 import binascii
+import netaddr
 import socket
 import struct
 import sys
+from urllib import parse
+from urllib import request
 
 from oslo_log import log as oslo_logging
-from six.moves.urllib import parse
-from six.moves.urllib import request
 
 from cloudbaseinit.osutils import factory as osutils_factory
 
@@ -89,3 +90,11 @@ def netmask6_to_4_truncate(netmask6):
     mask = "1" * length + "0" * (32 - length)
     network_address = struct.pack("!L", int(mask, 2))
     return socket.inet_ntoa(network_address)
+
+
+def ip_netmask_to_cidr(ip_address, netmask):
+    if not netmask:
+        return ip_address
+    prefix_len = netaddr.IPNetwork(
+        u"%s/%s" % (ip_address, netmask)).prefixlen
+    return u"%s/%s" % (ip_address, prefix_len)

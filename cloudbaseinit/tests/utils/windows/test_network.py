@@ -14,11 +14,7 @@
 
 import importlib
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
+import unittest.mock as mock
 
 from cloudbaseinit import exception as cbinit_exception
 
@@ -27,12 +23,12 @@ class WindowsNetworkUtilsTests(unittest.TestCase):
 
     def setUp(self):
         self._ctypes_mock = mock.MagicMock()
-        self._moves_mock = mock.MagicMock()
+        self._winreg_mock = mock.MagicMock()
 
         self._module_patcher = mock.patch.dict(
             'sys.modules',
             {'ctypes': self._ctypes_mock,
-             'six.moves': self._moves_mock})
+             'winreg': self._winreg_mock})
 
         self._module_patcher.start()
 
@@ -89,10 +85,10 @@ class WindowsNetworkUtilsTests(unittest.TestCase):
 
     def _test_get_registry_dhcp_server(self, dhcp_server, exception=None):
         fake_adapter = mock.sentinel.fake_adapter_name
-        self._moves_mock.winreg.QueryValueEx.return_value = [dhcp_server]
+        self._winreg_mock.QueryValueEx.return_value = [dhcp_server]
 
         if exception:
-            self._moves_mock.winreg.QueryValueEx.side_effect = [exception]
+            self._winreg_mock.QueryValueEx.side_effect = [exception]
 
             if exception.errno != 2:
                 self.assertRaises(cbinit_exception.CloudbaseInitException,
@@ -105,14 +101,14 @@ class WindowsNetworkUtilsTests(unittest.TestCase):
             else:
                 self.assertEqual(dhcp_server, response)
 
-            self._moves_mock.winreg.OpenKey.assert_called_once_with(
-                self._moves_mock.winreg.HKEY_LOCAL_MACHINE,
+            self._winreg_mock.OpenKey.assert_called_once_with(
+                self._winreg_mock.HKEY_LOCAL_MACHINE,
                 "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\"
                 "Interfaces\\%s" % fake_adapter, 0,
-                self._moves_mock.winreg.KEY_READ)
+                self._winreg_mock.KEY_READ)
 
-            self._moves_mock.winreg.QueryValueEx.assert_called_once_with(
-                self._moves_mock.winreg.OpenKey.return_value.__enter__(),
+            self._winreg_mock.QueryValueEx.assert_called_once_with(
+                self._winreg_mock.OpenKey.return_value.__enter__(),
                 "DhcpServer")
 
     def test_get_registry_dhcp_server(self):

@@ -17,14 +17,9 @@ import contextlib
 import functools
 import importlib
 import os
+import unittest.mock as mock
 
 import netaddr
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
-import six
 
 from cloudbaseinit import conf as cloudbaseinit_conf
 from cloudbaseinit import exception
@@ -66,7 +61,7 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
         self._mi_mock = mock.MagicMock()
         self._wmi_mock = mock.MagicMock()
         self._wmi_mock.x_wmi = WMIError
-        self._moves_mock = mock.MagicMock()
+        self._winreg_mock = mock.MagicMock()
         self._xmlrpc_client_mock = mock.MagicMock()
         self._ctypes_mock = mock.MagicMock()
         self._tzlocal_mock = mock.Mock()
@@ -86,12 +81,12 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
              'winerror': self._winerror_mock,
              'mi': self._mi_mock,
              'wmi': self._wmi_mock,
-             'six.moves': self._moves_mock,
-             'six.moves.xmlrpc_client': self._xmlrpc_client_mock,
+             'xmlrpc.client': self._xmlrpc_client_mock,
              'ctypes': self._ctypes_mock,
              'pywintypes': self._pywintypes_mock,
              'tzlocal': self._tzlocal_mock,
-             'winioctlcon': mock.MagicMock()})
+             'winioctlcon': mock.MagicMock(),
+             'winreg': self._winreg_mock})
         _module_patcher.start()
         self.addCleanup(_module_patcher.stop)
 
@@ -100,7 +95,6 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
         with mock.patch("cloudbaseinit.utils.windows.disk.GUID"):
             self.windows_utils = importlib.import_module(module_path)
 
-        self._winreg_mock = self._moves_mock.winreg
         self._windll_mock = self._ctypes_mock.windll
         self._wintypes_mock = self._ctypes_mock.wintypes
         self._client_mock = self._win32com_mock.client
@@ -322,7 +316,7 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
             response = self._winutils._get_user_sid_and_domain(self._USERNAME)
 
             advapi32.LookupAccountNameW.assert_called_with(
-                0, six.text_type(self._USERNAME), sid,
+                0, str(self._USERNAME), sid,
                 self._ctypes_mock.byref(cbSid), domainName,
                 self._ctypes_mock.byref(cchReferencedDomainName),
                 self._ctypes_mock.byref(sidNameUse))
@@ -369,12 +363,11 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
                                                    group_name)
 
             netapi32.NetLocalGroupAddMembers.assert_called_with(
-                0, six.text_type(group_name), 3,
+                0, str(group_name), 3,
                 self._ctypes_mock.pointer.return_value, 1)
 
             self._ctypes_mock.pointer.assert_called_once_with(lmi)
-            self.assertEqual(lmi.lgrmi3_domainandname,
-                             six.text_type(self._USERNAME))
+            self.assertEqual(lmi.lgrmi3_domainandname, str(self._USERNAME))
 
     def test_add_user_to_local_group_no_error(self):
         self._test_add_user_to_local_group(ret_value=0)
@@ -452,7 +445,9 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
         self._test_create_user(fail=True)
 
     @mock.patch('cloudbaseinit.osutils.windows.Win32_PROFILEINFO')
-    def _test_create_user_logon_session(self, mock_Win32_PROFILEINFO, logon,
+    @mock.patch('time.sleep')
+    def _test_create_user_logon_session(self, mock_time_sleep,
+                                        mock_Win32_PROFILEINFO, logon,
                                         loaduser, load_profile=True,
                                         last_error=None):
         self._wintypes_mock.HANDLE = mock.MagicMock()
@@ -474,7 +469,9 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
             userenv.LoadUserProfileW.return_value = None
             kernel32.CloseHandle.return_value = None
             with self.assert_raises_windows_message(
-                    "Cannot load user profile: %r", last_error):
+                    "Cannot load user profile: %r", last_error,
+                    get_last_error_called_times=4,
+                    format_error_called_times=4):
                 self._winutils.create_user_logon_session(
                     self._USERNAME, self._PASSWORD, domain='.',
                     load_profile=load_profile)
@@ -563,7 +560,7 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
 
         mock_SetComputerNameExW.assert_called_with(
             self._winutils.ComputerNamePhysicalDnsHostname,
-            six.text_type('fake name'))
+            str('fake name'))
 
     def test_set_host_name(self):
         self._test_set_host_name(ret_value='fake response')
@@ -835,28 +832,33 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
         self._test_set_static_network_config(ipv6=True)
 
     @mock.patch('cloudbaseinit.osutils.windows.WindowsUtils'
-                '.execute_process')
-    @mock.patch('cloudbaseinit.osutils.windows.WindowsUtils'
-                '._get_system_dir')
-    def _test_rename_network_adapter(self, should_fail, mock_get_system_dir,
-                                     mock_execute_process):
-        base_dir = "fake path"
+                '._get_network_msft_adapter')
+    def _test_rename_network_adapter(self, rename_exception,
+                                     mock_get_network_adapter):
         old_name = "fake_old"
         new_name = "fake_new"
-        mock_get_system_dir.return_value = base_dir
-        ret_val = 1 if should_fail else 0
-        mock_execute_process.return_value = (None, None, ret_val)
 
-        if should_fail:
+        adapter = mock.Mock()
+        adapter.Name = mock.sentinel.old_name
+        mock_get_network_adapter.return_value = adapter
+        get_network_adapter_called = 1
+        if rename_exception:
+            adapter.rename.side_effect = Exception("fake exception")
             with self.assertRaises(exception.CloudbaseInitException):
                 self._winutils.rename_network_adapter(old_name, new_name)
         else:
+            get_network_adapter_called = 2
             self._winutils.rename_network_adapter(old_name, new_name)
 
-        mock_get_system_dir.assert_called_once_with()
-        args = [os.path.join(base_dir, "netsh.exe"), "interface", "set",
-                "interface", 'name=%s' % old_name, 'newname=%s' % new_name]
-        mock_execute_process.assert_called_once_with(args, shell=False)
+        adapter.rename.assert_called()
+
+        self.assertEqual(mock_get_network_adapter.call_count,
+                         get_network_adapter_called)
+        self.assertEqual(mock_get_network_adapter.call_args_list[0].args,
+                         (old_name,))
+        if not exception:
+            self.assertEqual(mock_get_network_adapter.call_args_list[1].args,
+                             (new_name,))
 
     def _test_get_config_key_name(self, section):
         response = self._winutils._get_config_key_name(section)
@@ -1999,6 +2001,40 @@ class TestWindowsUtils(testutils.CloudbaseInitTestBase):
         self.assertEqual([(mock.sentinel.friendly_name,
                            mock.sentinel.mac_address,
                            mock.sentinel.dhcp_server)], response)
+
+    def test_fix_network_adapter_dhcp(self):
+        self._test_fix_network_adapter_dhcp(True)
+
+    def test_fix_network_adapter_dhcp_no_network_adapter(self):
+        self._test_fix_network_adapter_dhcp(False)
+
+    def _test_fix_network_adapter_dhcp(self, no_net_interface_found):
+        mock_interface_name = "eth12"
+        mock_enable_dhcp = True
+        mock_address_family = self.windows_utils.AF_INET
+
+        conn = self._wmi_mock.WMI.return_value
+        existing_net_interface = mock.Mock()
+        existing_net_interface.Dhcp = 0
+
+        if not no_net_interface_found:
+            conn.MSFT_NetIPInterface.return_value = [existing_net_interface]
+
+        if no_net_interface_found:
+            with self.assertRaises(exception.ItemNotFoundException):
+                self._winutils._fix_network_adapter_dhcp(
+                    mock_interface_name, mock_enable_dhcp,
+                    mock_address_family)
+        else:
+            self._winutils._fix_network_adapter_dhcp(
+                mock_interface_name, mock_enable_dhcp,
+                mock_address_family)
+
+            conn.MSFT_NetIPInterface.assert_called_once_with(
+                InterfaceAlias=mock_interface_name,
+                AddressFamily=mock_address_family)
+            self.assertEqual(existing_net_interface.Dhcp, 1)
+            existing_net_interface.put.assert_called_once()
 
     @mock.patch('cloudbaseinit.osutils.windows.WindowsUtils'
                 '.check_sysnative_dir_exists')

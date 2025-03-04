@@ -13,12 +13,7 @@
 #    under the License.
 
 import unittest
-
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
-import six
+import unittest.mock as mock
 
 from cloudbaseinit.plugins.common import base
 from cloudbaseinit.plugins.common import mtu
@@ -79,7 +74,7 @@ class MTUPluginTests(unittest.TestCase):
         self.assertFalse(mock_get_os_utils().set_network_mtu.called)
 
     def test_execute_success(self, mock_get_os_utils):
-        dhcp_options = {dhcp.OPTION_MTU: six.b("\x00\x04")}
+        dhcp_options = {dhcp.OPTION_MTU: "\x00\x04".encode("latin-1")}
 
         self._test_execute(mock_get_os_utils,
                            dhcp_options=dhcp_options)
