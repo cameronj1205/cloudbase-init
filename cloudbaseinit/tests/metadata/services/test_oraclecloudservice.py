@@ -61,3 +61,12 @@ class OracleCloudServiceTest(unittest.TestCase):
                 'opc/%s/instance/metadata/user_data' % self._service._metadata_version,
                 headers=oraclecloudservice.OracleCloudService._headers)
         self.assertEqual(response.decode(), "Testing our code is good\n")
+    
+    @mock.patch('cloudbaseinit.metadata.services.oraclecloudservice.OracleCloudService'
+                '._get_cache_data')
+    def test_get_host_name(self, mock_get_cache_data):
+        response = self._service.get_host_name()
+        mock_get_cache_data.assert_called_once_with(
+            'opc/%s/instance/hostname' % self._service._metadata_version,
+            headers=oraclecloudservice.OracleCloudService._headers)
+        self.assertEqual(mock_get_cache_data.return_value, response)

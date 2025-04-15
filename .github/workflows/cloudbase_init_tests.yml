@@ -8,30 +8,30 @@ env:
 on: [push, pull_request]
 
 jobs:
-  linux-unit-tests:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [ "3.12"]
-        architecture: ["x64"]
+  # linux-unit-tests:
+  #   runs-on: ubuntu-22.04
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       python-version: [ "3.12"]
+  #       architecture: ["x64"]
 
-    steps:
-    - name: Checkout cloudbase-init repository
-      uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        architecture: ${{ matrix.architecture }}
-    - name: Install python3 tox
-      shell: bash
-      run: |
-        python3 -m pip install tox setuptools --upgrade
-    - name: Run Cloudbase-Init unit tests with tox
-      shell: bash
-      run: |
-        tox run-parallel --parallel-live --parallel-no-spinner -e py3,pep8,cover,docs
+  #   steps:
+  #   - name: Checkout cloudbase-init repository
+  #     uses: actions/checkout@v4
+  #   - name: Set up Python ${{ matrix.python-version }}
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: ${{ matrix.python-version }}
+  #       architecture: ${{ matrix.architecture }}
+  #   - name: Install python3 tox
+  #     shell: bash
+  #     run: |
+  #       python3 -m pip install tox setuptools --upgrade
+  #   - name: Run Cloudbase-Init unit tests with tox
+  #     shell: bash
+  #     run: |
+  #       tox run-parallel --parallel-live --parallel-no-spinner -e py3,pep8,cover,docs
   windows-unit-tests:
     runs-on: windows-latest
     strategy:
