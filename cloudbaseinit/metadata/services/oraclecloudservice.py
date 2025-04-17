@@ -40,7 +40,8 @@ class OracleCloudService(base.BaseHTTPMetadataService):
     def get_instance_id(self):
         return self._get_cache_data('opc/%s/instance/id' %
                                     self._metadata_version,
-                                    headers=self._headers)
+                                    headers=self._headers,
+                                    decode=True)
 
     def get_user_data(self):
         return b64decode(self._get_cache_data('opc/%s/instance/metadata/user_data' %
@@ -50,4 +51,5 @@ class OracleCloudService(base.BaseHTTPMetadataService):
     def get_host_name(self):
         return self._get_cache_data('opc/%s/instance/hostname' %
                                     self._metadata_version,
-                                    headers=self._headers)
+                                    headers=self._headers,
+                                    decode=True)
